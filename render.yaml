@@ -1,24 +1,14 @@
+# Since you already have a database deployed, just deploy the web service
 services:
-  # PostgreSQL Database
-  - type: pserv
-    name: spring-api-db
-    env: docker
-    plan: free
-    databases:
-      - name: todolist
-        user: postgres
-
-  # Spring Boot Web Service
+  # Spring Boot Web Service  
   - type: web
     name: spring-api-backend
-    env: java
+    runtime: java
     plan: free
-    buildCommand: "./build.sh"
-    startCommand: "./start.sh"
+    buildCommand: "chmod +x build.sh && ./build.sh"
+    startCommand: "chmod +x start.sh && ./start.sh"
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: DATABASE_URL
-        fromDatabase:
-          name: spring-api-db
-          property: connectionString
+        value: "postgresql://todolist_rddd_user:LwPa8KxAq4cjekhLRvxwATRI0Zom0sfO@dpg-d3ahrj95pdvs73csvie0-a.oregon-postgres.render.com/todolist_rddd"
