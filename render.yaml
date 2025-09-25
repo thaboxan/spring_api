@@ -1,0 +1,24 @@
+services:
+  # PostgreSQL Database
+  - type: pserv
+    name: spring-api-db
+    env: docker
+    plan: free
+    databases:
+      - name: todolist
+        user: postgres
+
+  # Spring Boot Web Service
+  - type: web
+    name: spring-api-backend
+    env: java
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "./start.sh"
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: spring-api-db
+          property: connectionString
