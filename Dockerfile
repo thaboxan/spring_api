@@ -28,5 +28,5 @@ RUN ./mvnw clean package -DskipTests
 # Expose port 8080
 EXPOSE 8080
 
-# Run the application with Docker profile
-CMD ["java", "-jar", "-Dspring.profiles.active=docker", "target/spring_api-0.0.1-SNAPSHOT.war"]
+# Run the application with production profile
+CMD ["java", "-jar", "-Dspring.profiles.active=prod", "-Dserver.port=${PORT:-8080}", "target/spring_api-0.0.1-SNAPSHOT.war"]
