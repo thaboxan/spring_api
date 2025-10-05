@@ -19,48 +19,27 @@ A complete Todo List application built with Spring Boot, PostgreSQL, and Docker.
 - Maven (included via wrapper)
 - Docker Desktop (must be running)
 
-## Quick Start
+## Setup Instructions
 
-### Option 1: Use the Startup Script (Recommended)
+### Manual Setup Process
 
-1. **Start Docker Desktop** on your machine
-2. **Run the startup script**:
-   ```cmd
-   start.bat
-   ```
-3. **Open your browser** and go to `http://localhost:8080`
-
-### Option 2: Manual Setup
-
-1. **Start Docker Desktop**
-
-2. **Start the PostgreSQL database**:
-   ```cmd
-   docker-compose up -d
-   ```
-
-3. **Run the Spring Boot application**:
-   ```cmd
-   mvnw.cmd spring-boot:run
-   ```
-
+1. **Ensure Docker Desktop is running** on your machine
+2. **Start the PostgreSQL database container** using Docker Compose
+3. **Run the Spring Boot application** using the Maven wrapper
 4. **Access the application**:
    - Web Frontend: `http://localhost:8080`
    - API: `http://localhost:8080/api/todos`
 
-## Stopping the Application
+## Application Management
 
-### Option 1: Use the Stop Script
-```cmd
-stop.bat
-```
+### Starting the Application
+1. Launch Docker Desktop and wait for it to be fully running
+2. Start the PostgreSQL container from the docker-compose configuration
+3. Start the Spring Boot application using Maven
 
-### Option 2: Manual Stop
-1. Press `Ctrl+C` in the terminal running the Spring Boot application
-2. Stop the database:
-   ```cmd
-   docker-compose down
-   ```
+### Stopping the Application
+1. Stop the Spring Boot application (interrupt the process)
+2. Stop the PostgreSQL container using Docker Compose
 
 ## Using the Application
 
@@ -71,29 +50,13 @@ stop.bat
 4. Delete todos using the delete button
 5. Filter todos using the buttons (All, Incomplete, Completed)
 
-### API Usage Examples
+### API Testing
 
-#### Create a Todo
-```bash
-curl -X POST http://localhost:8080/api/todos ^
-  -H "Content-Type: application/json" ^
-  -d "{\"title\": \"Learn Spring Boot\", \"description\": \"Complete the Spring Boot tutorial\"}"
-```
-
-#### Get All Todos
-```bash
-curl http://localhost:8080/api/todos
-```
-
-#### Toggle Todo Completion
-```bash
-curl -X PATCH http://localhost:8080/api/todos/1/toggle
-```
-
-#### Delete a Todo
-```bash
-curl -X DELETE http://localhost:8080/api/todos/1
-```
+You can test the API endpoints using:
+- Web browser for GET requests
+- Postman or similar API testing tools
+- Browser developer tools
+- Any HTTP client application
 
 ## API Endpoints
 
@@ -111,27 +74,11 @@ curl -X DELETE http://localhost:8080/api/todos/1
 
 ## Example API Usage
 
-### Create a Todo
-```bash
-curl -X POST http://localhost:8080/api/todos \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Learn Spring Boot", "description": "Complete the Spring Boot tutorial"}'
-```
-
-### Get All Todos
-```bash
-curl http://localhost:8080/api/todos
-```
-
-### Toggle Todo Completion
-```bash
-curl -X PATCH http://localhost:8080/api/todos/1/toggle
-```
-
-### Delete a Todo
-```bash
-curl -X DELETE http://localhost:8080/api/todos/1
-```
+### Request Examples
+- **Create a Todo**: Send POST request to `/api/todos` with JSON body containing title and description
+- **Get All Todos**: Send GET request to `/api/todos`
+- **Toggle Completion**: Send PATCH request to `/api/todos/{id}/toggle`
+- **Delete a Todo**: Send DELETE request to `/api/todos/{id}`
 
 ## Database Schema
 
@@ -150,29 +97,17 @@ CREATE TABLE todos (
 
 ## Development
 
-### Running Tests
+### Testing
+- Run unit tests using Maven wrapper test command
+- Tests are located in `src/test/java`
 
-```bash
-mvnw test
-```
+### Building
+- Build the application using Maven wrapper clean package command
+- Generated JAR file will be in `target/` directory
 
-### Building the Application
-
-```bash
-mvnw clean package
-```
-
-### Stopping the Database
-
-```bash
-docker-compose down
-```
-
-To remove the database volume as well:
-
-```bash
-docker-compose down -v
-```
+### Database Management
+- Stop the PostgreSQL container using Docker Compose down command
+- To reset all data, stop containers and remove volumes
 
 ## Technology Stack
 
@@ -210,9 +145,11 @@ src/
 
 ## Troubleshooting
 
-1. **Database Connection Issues**: Make sure PostgreSQL is running via Docker Compose
-2. **Port Already in Use**: Check if port 8080 or 5432 is already in use
-3. **Docker Issues**: Ensure Docker is running and you have sufficient permissions
+1. **Database Connection Issues**: Ensure PostgreSQL container is running via Docker Compose
+2. **Port Already in Use**: Check if port 8080 or 5432 is already in use by another application
+3. **Docker Issues**: Ensure Docker Desktop is running and you have sufficient permissions
+4. **Application Startup**: Verify Java 21 is properly installed and configured
+5. **Browser Access**: Clear browser cache if web interface doesn't load properly
 
 ## Next Steps
 

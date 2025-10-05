@@ -3,32 +3,25 @@
 ## Quick Start Steps:
 
 ### 1. Ensure Docker Desktop is Running
-- Docker Desktop should be starting automatically now
-- Wait for the Docker Desktop icon in system tray to show "Running"
-- This usually takes 30-60 seconds
+- Launch Docker Desktop application
+- Wait for the Docker Desktop icon in system tray to show "Running" status
+- This initialization process usually takes 30-60 seconds
 
 ### 2. Start PostgreSQL Database
-Once Docker Desktop is running, use one of these methods:
-
-**Method A: Use the startup script**
-```cmd
-start-with-postgresql.bat
-```
-
-**Method B: Manual startup**
-```cmd
-docker-compose up -d postgres-db
-```
+Once Docker Desktop is fully running:
+- Navigate to the project directory in your terminal
+- Use Docker Compose to start the PostgreSQL container
+- The container will be configured with the settings defined in docker-compose.yml
 
 ### 3. Verify Database is Running
-```cmd
-check-database.bat
-```
+- Check that the PostgreSQL container is running using Docker container listing
+- Verify the container is listening on port 5432
+- Confirm the database is accessible
 
 ### 4. Start Spring Boot Application
-```cmd
-mvn spring-boot:run
-```
+- Use Maven wrapper to start the Spring Boot application
+- The application will automatically connect to the PostgreSQL container
+- Access the application through your web browser
 
 ## Database Configuration Details:
 - **Database**: PostgreSQL 15
@@ -41,29 +34,34 @@ mvn spring-boot:run
 ## Troubleshooting:
 
 ### If PostgreSQL container fails to start:
-1. Check Docker Desktop is running: `docker ps`
-2. Check container logs: `docker-compose logs postgres-db`
-3. Restart container: `docker-compose down && docker-compose up -d postgres-db`
+1. Verify Docker Desktop is running and responsive
+2. Check Docker container logs for error messages
+3. Restart the container using Docker Compose
 
 ### If Spring Boot can't connect to database:
-1. Verify PostgreSQL is running: `docker ps`
-2. Test connection: `docker exec todo-postgres-db psql -U postgres -d todolist -c "SELECT 1;"`
-3. Check application.properties configuration
+1. Confirm PostgreSQL container is running and accessible
+2. Test database connection using Docker exec to connect to container
+3. Verify application.properties contains correct database configuration
+4. Check that port 5432 is not blocked by firewall or used by other applications
 
 ### Data Persistence:
-- Data is stored in Docker volume `postgres_data`
-- Data persists across container restarts
-- To reset data: `docker-compose down -v` (removes volumes)
+- Data is stored in Docker volume named `postgres_data`
+- All todo data persists across container restarts
+- To completely reset all data, stop containers and remove associated volumes
+- Database schema is automatically created by Hibernate on first startup
 
 ## Testing CRUD Operations:
 
 Once everything is running, test your application:
-1. Navigate to: http://localhost:8080
-2. Test creating, reading, updating, and deleting todos
-3. Restart the application and verify data persists
+1. Open web browser and navigate to: http://localhost:8080
+2. Test creating new todos using the web form
+3. Test reading todos by viewing the list on the main page
+4. Test updating todos by marking them as complete/incomplete
+5. Test deleting todos using the delete buttons
+6. Restart the application and verify that all data persists
 
-## Files Created/Modified:
-- `application.properties` - PostgreSQL connection settings
-- `docker-compose.yml` - PostgreSQL container configuration  
-- `start-with-postgresql.bat` - Automated startup script
-- `check-database.bat` - Database status checker
+## Configuration Files:
+- `application.properties` - Contains PostgreSQL connection settings
+- `docker-compose.yml` - Defines PostgreSQL container configuration
+- `application-docker.properties` - Docker-specific database configuration
+- `Dockerfile` - Application containerization instructions
