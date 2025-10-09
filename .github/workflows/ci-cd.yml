@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -46,7 +48,10 @@ jobs:
           cache: 'maven'
 
       - name: Make mvnw executable
-        run: chmod +x mvnw
+        run: |
+          chmod +x mvnw
+          chmod +x mvnw.cmd
+          ls -la mvnw
 
       - name: Run tests
         run: ./mvnw test
