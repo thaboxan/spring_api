@@ -163,20 +163,44 @@ jobs:
         run: |
           echo "🚀 Deploying Docker container..."
           
-          # Ensure network exists
-          docker network create spring-api-network 2>/dev/null || true
+          # Check if PostgreSQL container exists and get its network
+          POSTGRES_NETWORK=$(docker inspect spring-api-postgres --format='{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{end}}' 2>/dev/null || echo "")
           
-          # Start new container
-          docker run -d \
-            --name spring-api-app \
-            -p 8080:8080 \
-            -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/todolist \
-            -e SPRING_DATASOURCE_USERNAME=postgres \
-            -e SPRING_DATASOURCE_PASSWORD=admin \
-            -e SPRING_PROFILES_ACTIVE=docker \
-            --network spring-api-network \
-            --restart unless-stopped \
-            spring-api:latest
+          if [ -z "$POSTGRES_NETWORK" ]; then
+            echo "❌ PostgreSQL container not found! Starting with Docker Compose..."
+            # Start PostgreSQL using docker-compose if not running
+            docker-compose up -d postgres-db
+            sleep 10
+            POSTGRES_NETWORK="spring_api_spring-api-network"
+          fi
+          
+          echo "📡 Using network: $POSTGRES_NETWORK"
+          
+          # Start new container on the same network as PostgreSQL
+          if [ "$POSTGRES_NETWORK" = "spring_api_spring-api-network" ]; then
+            # Connect to docker-compose network
+            docker run -d \
+              --name spring-api-app \
+              -p 8080:8080 \
+              -e SPRING_DATASOURCE_URL=jdbc:postgresql://spring-api-postgres:5432/todolist \
+              -e SPRING_DATASOURCE_USERNAME=postgres \
+              -e SPRING_DATASOURCE_PASSWORD=admin \
+              -e SPRING_PROFILES_ACTIVE=docker \
+              --network spring_api_spring-api-network \
+              --restart unless-stopped \
+              spring-api:latest
+          else
+            # Use localhost connection (fallback)
+            docker run -d \
+              --name spring-api-app \
+              -p 8080:8080 \
+              -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/todolist \
+              -e SPRING_DATASOURCE_USERNAME=postgres \
+              -e SPRING_DATASOURCE_PASSWORD=admin \
+              -e SPRING_PROFILES_ACTIVE=docker \
+              --restart unless-stopped \
+              spring-api:latest
+          fi
           
           echo "✅ Docker container started"
 
