@@ -1,106 +1,102 @@
 package com.springapi.spring_api.controller;
 
+import com.springapi.spring_api.dto.TodoRequest;
 import com.springapi.spring_api.entity.Todo;
 import com.springapi.spring_api.service.TodoService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/todos")
-@CrossOrigin(origins = "*") // Enable CORS for frontend integration
+@CrossOrigin(origins = "*")
+@Tag(name = "Todos", description = "CRUD operations for Todos")
 public class TodoController {
-    
-    @Autowired
-    private TodoService todoService;
-    
-    // Get all todos
+
+    private final TodoService todoService;
+
+    public TodoController(TodoService todoService) {
+        this.todoService = todoService;
+    }
+
+    @Operation(summary = "Get all todos")
     @GetMapping
     public ResponseEntity<List<Todo>> getAllTodos() {
-        List<Todo> todos = todoService.getAllTodos();
-        return new ResponseEntity<>(todos, HttpStatus.OK);
+        return ResponseEntity.ok(todoService.getAllTodos());
     }
-    
-    // Get todo by ID
+
+    @Operation(summary = "Get a todo by ID")
     @GetMapping("/{id}")
     public ResponseEntity<Todo> getTodoById(@PathVariable Long id) {
-        Optional<Todo> todo = todoService.getTodoById(id);
-        if (todo.isPresent()) {
-            return new ResponseEntity<>(todo.get(), HttpStatus.OK);
-        }
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        return todoService.getTodoById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
-    
-    // Create a new todo
+
+    @Operation(summary = "Create a new todo")
     @PostMapping
-    public ResponseEntity<Todo> createTodo(@RequestBody Todo todo) {
-        try {
-            Todo createdTodo = todoService.createTodo(todo);
-            return new ResponseEntity<>(createdTodo, HttpStatus.CREATED);
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseEntity<Todo> createTodo(@Valid @RequestBody TodoRequest request) {
+        Todo todo = new Todo();
+        todo.setTitle(request.getTitle());
+        todo.setDescription(request.getDescription());
+        todo.setCompleted(request.getCompleted());
+        Todo created = todoService.createTodo(todo);
+        return ResponseEntity.status(201).body(created);
     }
-    
-    // Update an existing todo
+
+    @Operation(summary = "Update an existing todo")
     @PutMapping("/{id}")
-    public ResponseEntity<Todo> updateTodo(@PathVariable Long id, @RequestBody Todo todoDetails) {
-        Todo updatedTodo = todoService.updateTodo(id, todoDetails);
-        if (updatedTodo != null) {
-            return new ResponseEntity<>(updatedTodo, HttpStatus.OK);
-        }
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    public ResponseEntity<Todo> updateTodo(@PathVariable Long id, @Valid @RequestBody TodoRequest request) {
+        Todo todoDetails = new Todo();
+        todoDetails.setTitle(request.getTitle());
+        todoDetails.setDescription(request.getDescription());
+        todoDetails.setCompleted(request.getCompleted());
+        Todo updated = todoService.updateTodo(id, todoDetails);
+        if (updated == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(updated);
     }
-    
-    // Toggle completion status
+
+    @Operation(summary = "Toggle completion status of a todo")
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<Todo> toggleCompletion(@PathVariable Long id) {
-        Todo updatedTodo = todoService.toggleCompletion(id);
-        if (updatedTodo != null) {
-            return new ResponseEntity<>(updatedTodo, HttpStatus.OK);
-        }
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        Todo updated = todoService.toggleCompletion(id);
+        if (updated == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(updated);
     }
-    
-    // Delete a todo
+
+    @Operation(summary = "Delete a todo")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTodo(@PathVariable Long id) {
         boolean deleted = todoService.deleteTodo(id);
-        if (deleted) {
-            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-        }
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        if (!deleted) return ResponseEntity.notFound().build();
+        return ResponseEntity.noContent().build();
     }
-    
-    // Get todos by completion status
+
+    @Operation(summary = "Get todos by completion status")
     @GetMapping("/status/{completed}")
     public ResponseEntity<List<Todo>> getTodosByStatus(@PathVariable Boolean completed) {
-        List<Todo> todos = todoService.getTodosByStatus(completed);
-        return new ResponseEntity<>(todos, HttpStatus.OK);
+        return ResponseEntity.ok(todoService.getTodosByStatus(completed));
     }
-    
-    // Search todos by title
+
+    @Operation(summary = "Search todos by title")
     @GetMapping("/search")
     public ResponseEntity<List<Todo>> searchTodos(@RequestParam String title) {
-        List<Todo> todos = todoService.searchTodos(title);
-        return new ResponseEntity<>(todos, HttpStatus.OK);
+        return ResponseEntity.ok(todoService.searchTodos(title));
     }
-    
-    // Get incomplete todos
+
+    @Operation(summary = "Get incomplete todos")
     @GetMapping("/incomplete")
     public ResponseEntity<List<Todo>> getIncompleteTodos() {
-        List<Todo> todos = todoService.getIncompleteTodos();
-        return new ResponseEntity<>(todos, HttpStatus.OK);
+        return ResponseEntity.ok(todoService.getIncompleteTodos());
     }
-    
-    // Get completed todos
+
+    @Operation(summary = "Get completed todos")
     @GetMapping("/completed")
     public ResponseEntity<List<Todo>> getCompletedTodos() {
-        List<Todo> todos = todoService.getCompletedTodos();
-        return new ResponseEntity<>(todos, HttpStatus.OK);
+        return ResponseEntity.ok(todoService.getCompletedTodos());
     }
 }
