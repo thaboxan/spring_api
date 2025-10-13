@@ -1,0 +1,300 @@
+name: CI/CD Pipeline (Self-Hosted)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_IMAGE_NAME: spring-api
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  # Job 1: Build and Test
+  build-and-test:
+    name: Build and Test
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Make mvnw executable
+        run: |
+          chmod +x mvnw
+          chmod +x mvnw.cmd
+          ls -la mvnw
+
+      - name: Run tests
+        run: ./mvnw test
+
+      - name: Build application
+        run: ./mvnw clean package -DskipTests
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spring-api-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # Job 2: Deploy to VM (Local)
+  deploy-local:
+    name: Deploy to Local VM (Port 8081)
+    runs-on: self-hosted
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Stop existing local application
+        run: |
+          # Find and kill any existing Spring Boot process on port 8081
+          PID=$(lsof -t -i :8081 2>/dev/null || true)
+          if [ ! -z "$PID" ]; then
+            echo "Stopping existing application with PID: $PID"
+            kill $PID || true
+            sleep 5
+          fi
+          
+          # Kill any Java processes that might be running Spring API
+          pkill -f "spring_api.*local" || true
+          sleep 2
+
+      - name: Deploy new application
+        run: |
+          # Find the JAR file
+          JAR_FILE=$(find target -name "spring_api-*.jar" | head -n 1)
+          
+          if [ -z "$JAR_FILE" ]; then
+            echo "❌ JAR file not found!"
+            exit 1
+          fi
+          
+          echo "📦 Deploying JAR: $JAR_FILE"
+          
+          # Start application on port 8081 with local profile
+          nohup java -jar \
+            -Dspring.profiles.active=local \
+            -Dserver.port=8081 \
+            -Dspring.datasource.url=jdbc:postgresql://localhost:5432/todolist \
+            -Dspring.datasource.username=postgres \
+            -Dspring.datasource.password=admin \
+            "$JAR_FILE" > local-app.log 2>&1 &
+          
+          # Save PID
+          echo $! > local-app.pid
+          
+          echo "🚀 Application started with PID: $(cat local-app.pid)"
+
+      - name: Wait and verify deployment
+        run: |
+          echo "⏳ Waiting for application to start..."
+          sleep 15
+          
+          # Check if process is still running
+          if ps -p $(cat local-app.pid) > /dev/null 2>&1; then
+            echo "✅ Process is running with PID: $(cat local-app.pid)"
+          else
+            echo "❌ Process is not running!"
+            echo "📋 Application logs:"
+            cat local-app.log
+            exit 1
+          fi
+          
+          # Test health endpoint
+          echo "🔍 Testing health endpoint..."
+          for i in {1..10}; do
+            if curl -f -s http://localhost:8081/api/todos > /dev/null; then
+              echo "✅ Local deployment is healthy! (Port 8081)"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "❌ Health check failed after 10 attempts"
+              echo "📋 Application logs:"
+              tail -50 local-app.log
+              exit 1
+            fi
+            echo "⏳ Attempt $i/10 - waiting..."
+            sleep 5
+          done
+
+  # Job 3: Build and Push Docker Image
+  build-docker:
+    name: Build and Push Docker Image
+    runs-on: self-hosted
+    needs: build-and-test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 4: Deploy Docker Container
+  deploy-docker:
+    name: Deploy Docker Container (Port 8080)
+    runs-on: self-hosted
+    needs: build-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Stop and cleanup old containers
+        run: |
+          # Stop existing containers
+          docker stop spring-api-app 2>/dev/null || true
+          docker rm spring-api-app 2>/dev/null || true
+          
+          # Clean up unused images
+          docker image prune -f
+
+      - name: Deploy new Docker container
+        run: |
+          # Pull latest image
+          docker pull ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:latest
+          
+          # Start new container (using docker-compose network)
+          docker run -d \
+            --name spring-api-app \
+            -p 8080:8080 \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/todolist \
+            -e SPRING_DATASOURCE_USERNAME=postgres \
+            -e SPRING_DATASOURCE_PASSWORD=admin \
+            -e SPRING_PROFILES_ACTIVE=docker \
+            --network spring-api-network \
+            --restart unless-stopped \
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}:latest
+
+      - name: Verify Docker deployment
+        run: |
+          echo "⏳ Waiting for Docker container to start..."
+          sleep 20
+          
+          # Check container status
+          if docker ps | grep -q "spring-api-app"; then
+            echo "✅ Docker container is running"
+            docker ps | grep spring-api-app
+          else
+            echo "❌ Docker container failed to start"
+            docker logs spring-api-app
+            exit 1
+          fi
+          
+          # Test health endpoint
+          echo "🔍 Testing Docker health endpoint..."
+          for i in {1..10}; do
+            if curl -f -s http://localhost:8080/api/todos > /dev/null; then
+              echo "✅ Docker deployment is healthy! (Port 8080)"
+              break
+            fi
+            if [ $i -eq 10 ]; then
+              echo "❌ Docker health check failed after 10 attempts"
+              docker logs spring-api-app --tail 50
+              exit 1
+            fi
+            echo "⏳ Attempt $i/10 - waiting..."
+            sleep 5
+          done
+
+  # Job 5: Final Health Check
+  final-health-check:
+    name: Final Health Check - Both Deployments
+    runs-on: self-hosted
+    needs: [deploy-local, deploy-docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Test both deployments
+        run: |
+          echo "🎯 Final verification of both deployments..."
+          
+          # Test Local (VM) deployment
+          echo "🔍 Testing Local VM deployment (Port 8081)..."
+          RESPONSE_8081=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/api/todos)
+          if [ "$RESPONSE_8081" = "200" ]; then
+            echo "✅ Local VM deployment: HEALTHY"
+            TODO_COUNT_8081=$(curl -s http://localhost:8081/api/todos | jq '. | length')
+            echo "   📊 Todos count: $TODO_COUNT_8081"
+          else
+            echo "❌ Local VM deployment: FAILED (HTTP $RESPONSE_8081)"
+            exit 1
+          fi
+          
+          # Test Docker deployment
+          echo "🔍 Testing Docker deployment (Port 8080)..."
+          RESPONSE_8080=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/todos)
+          if [ "$RESPONSE_8080" = "200" ]; then
+            echo "✅ Docker deployment: HEALTHY"
+            TODO_COUNT_8080=$(curl -s http://localhost:8080/api/todos | jq '. | length')
+            echo "   📊 Todos count: $TODO_COUNT_8080"
+          else
+            echo "❌ Docker deployment: FAILED (HTTP $RESPONSE_8080)"
+            exit 1
+          fi
+          
+          # Verify database consistency
+          if [ "$TODO_COUNT_8081" = "$TODO_COUNT_8080" ]; then
+            echo "✅ Database consistency: VERIFIED"
+            echo "   Both deployments show same data count: $TODO_COUNT_8081"
+          else
+            echo "⚠️  Database consistency: WARNING"
+            echo "   Local VM count: $TODO_COUNT_8081"
+            echo "   Docker count: $TODO_COUNT_8080"
+          fi
+          
+          echo ""
+          echo "🎉 DEPLOYMENT SUMMARY"
+          echo "===================="
+          echo "✅ Local VM:  http://localhost:8081 (PID: $(cat local-app.pid 2>/dev/null || echo 'Unknown'))"
+          echo "✅ Docker:    http://localhost:8080 (Container: spring-api-app)"
+          echo "📊 Database:  Shared PostgreSQL on port 5432"
+          echo "🚀 Status:    Both deployments ACTIVE and HEALTHY"
+
+      - name: Cleanup workspace
+        run: |
+          # Clean up build artifacts but keep logs
+          rm -f target/*.jar.original
+          
+          echo "🧹 Cleanup completed"

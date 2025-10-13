@@ -1,46 +1,58 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database
   postgres-db:
-    image: postgres:15
-    container_name: todo-postgres-db
+    image: postgres:15-alpine
+    container_name: spring-api-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: todolist
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - ./data:/docker-entrypoint-initdb.d
+    networks:
+      - spring-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d todolist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Spring Boot Backend
-  backend:
+  # Spring Boot Application
+  spring-api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: todo-backend
+    container_name: spring-api-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
-      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
-      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
-      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
-    ports:
-      - "${SERVER_PORT}:8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/todolist
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: admin
+      SPRING_PROFILES_ACTIVE: docker
     depends_on:
-      - postgres-db
-    restart: unless-stopped
-
-  # Frontend (Nginx)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: todo-frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - spring-api-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres_data:
+    driver: local
+
+networks:
+  spring-api-network:
+    driver: bridge

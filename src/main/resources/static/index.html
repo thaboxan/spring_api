@@ -131,10 +131,54 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:8080/api/todos';
+        // Detect which backend is available (Docker on 8080 or VM on 8081)
+        let API_BASE_URL = 'http://localhost:8080/api/todos';
+        
+        // Try to detect the correct API URL
+        async function detectApiUrl() {
+            // First try port 8080 (Docker)
+            try {
+                const response = await fetch('http://localhost:8080/api/todos', { 
+                    method: 'GET',
+                    signal: AbortSignal.timeout(2000) // 2 second timeout
+                });
+                if (response.ok) {
+                    API_BASE_URL = 'http://localhost:8080/api/todos';
+                    return;
+                }
+            } catch (e) {
+                console.log('Port 8080 not available, trying 8081...');
+            }
+            
+            // Try port 8081 (VM)
+            try {
+                const response = await fetch('http://localhost:8081/api/todos', { 
+                    method: 'GET',
+                    signal: AbortSignal.timeout(2000)
+                });
+                if (response.ok) {
+                    API_BASE_URL = 'http://localhost:8081/api/todos';
+                    return;
+                }
+            } catch (e) {
+                console.log('Port 8081 not available');
+            }
+            
+            // If neither works, show error
+            throw new Error('No backend server available on port 8080 or 8081');
+        }
 
         // Load todos when page loads
-        document.addEventListener('DOMContentLoaded', loadTodos);
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await detectApiUrl();
+                console.log('Using API URL:', API_BASE_URL);
+                await loadTodos();
+            } catch (error) {
+                console.error('Error detecting API:', error);
+                document.getElementById('todoList').innerHTML = '<p>Error: Cannot connect to backend server on port 8080 or 8081. Make sure the server is running.</p>';
+            }
+        });
 
         async function loadTodos() {
             try {
